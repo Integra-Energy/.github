@@ -8,6 +8,9 @@ on:
 
 jobs:
   add-to-project:
+    # Only issues are tracked on the board; PRs link to their issue instead of
+    # creating their own card. Skip when the caller was triggered by a pull_request.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - id: add
