@@ -13,10 +13,17 @@ on:
 jobs:
   awaiting-evolt:
     runs-on: ubuntu-latest
+    # Built-in GITHUB_TOKEN reads this repo's commits/PRs/issues; the PAT is only used
+    # for the org-level project board writes (which GITHUB_TOKEN can't do).
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     steps:
       - name: Move linked issues to Awaiting Evolt
         env:
-          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          GH_TOKEN: ${{ github.token }}
+          PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
           BEFORE: ${{ github.event.before }}
@@ -56,8 +63,8 @@ jobs:
             exit 0
           fi
 
-          # 4. Project + Status field metadata.
-          DATA=$(gh api graphql -f query='
+          # 4. Project + Status field metadata. (PAT: org project access)
+          DATA=$(GH_TOKEN="$PAT" gh api graphql -f query='
             query($org:String!, $num:Int!) {
               organization(login:$org) {
                 projectV2(number:$num) {
@@ -79,11 +86,11 @@ jobs:
           # 5. For each issue: ensure it's on the board (idempotent) and set Status. Issue stays OPEN.
           for N in $ISSUES; do
             CONTENT_ID=$(gh api "repos/$OWNER/$REPO/issues/$N" --jq '.node_id')
-            ITEM_ID=$(gh api graphql -f query='
+            ITEM_ID=$(GH_TOKEN="$PAT" gh api graphql -f query='
               mutation($project:ID!, $content:ID!) {
                 addProjectV2ItemById(input:{projectId:$project, contentId:$content}) { item { id } }
               }' -f project="$PROJECT_ID" -f content="$CONTENT_ID" --jq '.data.addProjectV2ItemById.item.id')
-            gh api graphql -f query='
+            GH_TOKEN="$PAT" gh api graphql -f query='
               mutation($project:ID!, $item:ID!, $field:ID!, $option:String!) {
                 updateProjectV2ItemFieldValue(input:{
                   projectId:$project, itemId:$item, fieldId:$field,
